@@ -7,8 +7,8 @@ Type-safe validation with Branded types and precisely inferred error types
 ## Usage
 
 ```typescript
-import type * as v from 'okke';
-import { field, nonNull, obj } from 'okke/obj';
+import v from 'okke';
+import { object } from 'okke/obj';
 import { max, min, nonEmpty, str } from 'okke/str';
 
 declare const atLeast5: unique symbol;
@@ -20,24 +20,10 @@ type AtMost15 = v.Brand<typeof atMost15>;
 declare const atMost140: unique symbol;
 type AtMost140 = v.Brand<typeof atMost140>;
 
-const va = obj
-    .andThen(
-        v.and(
-            field(
-                'username',
-                str.andThen(
-                    v.and(
-                        min<AtLeast5>(5),
-                        max<AtMost15>(15)
-                    )
-                )
-            ),
-            field(
-                'description',
-                str.andThen(max<AtMost140>(140))
-            ),
-        ),
-    );
+const va = object({
+    username: str.pipe(v.and(min<AtLeast5>(5), max<AtMost15>(15))),
+    description: str.pipe(max<AtMost140>(140)),
+});
 
 type MyObj = v.infer<typeof va>;
 // type MyObj =
@@ -58,7 +44,9 @@ if (res.success) {
     //           username:
     //               | "object.missing_field"
     //               | "string.invalid_type"
-    //               | readonly ("string.too_short" | "string.too_long")[];
+    //               | "string.too_short"
+    //               | "string.too_long"
+    //               | ("string.too_short" | "string.too_long")[];
     //           description:
     //               | "object.missing_field"
     //               | "string.invalid_type"
