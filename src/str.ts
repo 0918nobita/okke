@@ -1,39 +1,61 @@
-import type { Brand } from './brand';
+import type { OkkeError } from './error';
 import { err, ok } from './result';
-import { Validator } from './validator';
+import type { Validator } from './validator';
 
-export const str = new Validator<
+export const str: Validator<
     string,
-    'string.invalid_type',
-    unknown,
+    OkkeError<'.', 'string.invalid_type'>,
     unknown
->((input) =>
-    typeof input === 'string' ? ok(input) : err('string.invalid_type'),
-);
+> = (input) =>
+    typeof input === 'string'
+        ? ok(input)
+        : err([{ path: '.', reason: 'string.invalid_type' }]);
 
-declare const nonEmptyBrand: unique symbol;
+// import type { Brand } from './brand';
 
-export type NonEmptyBrand = Brand<typeof nonEmptyBrand>;
+// declare const nonEmptyBrand: unique symbol;
 
-export const nonEmpty = new Validator<string, 'string.empty', NonEmptyBrand>(
-    (input) =>
-        input.length > 0
-            ? ok(input as string & NonEmptyBrand)
-            : err('string.empty'),
-);
+// export type NonEmptyBrand = Brand<typeof nonEmptyBrand>;
 
-export const min = <B = unknown>(len: number) =>
-    new Validator<string, 'string.too_short', B>((input) => {
-        if (input.length < len) {
-            return err('string.too_short');
-        }
-        return ok(input as string & B);
-    });
+// export const nonEmpty: Validator<
+//     string,
+//     readonly OkkeError<'.', 'string.empty'>[],
+//     NonEmptyBrand
+// > = (input) =>
+//     input.length > 0
+//         ? ok(input as string & NonEmptyBrand)
+//         : err([{ path: '.', reason: 'string.empty' }]);
 
-export const max = <B = unknown>(len: number) =>
-    new Validator<string, 'string.too_long', B>((input) => {
-        if (input.length > len) {
-            return err('string.too_long');
-        }
-        return ok(input as string & B);
-    });
+// export const min =
+//     <const B = unknown>(
+//         len: number,
+//     ): Validator<
+//         string,
+//         readonly OkkeError<'.', { type: 'string.too_short'; len: number }>[],
+//         B
+//     > =>
+//     (input) => {
+//         if (input.length < len) {
+//             return err([
+//                 { path: '.', reason: { type: 'string.too_short', len } },
+//             ]);
+//         }
+//         return ok(input as string & B);
+//     };
+
+// export const max =
+//     <B = unknown>(
+//         len: number,
+//     ): Validator<
+//         string,
+//         readonly OkkeError<'.', { type: 'string.too_long'; len: number }>[],
+//         B
+//     > =>
+//     (input) => {
+//         if (input.length > len) {
+//             return err([
+//                 { path: '.', reason: { type: 'string.too_long', len } },
+//             ]);
+//         }
+//         return ok(input as string & B);
+//     };

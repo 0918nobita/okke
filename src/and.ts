@@ -1,46 +1,49 @@
-import type { MergeErrors } from './mergeErrors';
+import type { AnyError } from './error';
 import { err, ok } from './result';
-import { Validator } from './validator';
+import type {
+    InferError,
+    InferInput,
+    InferOutput,
+    Validator,
+} from './validator';
 
-type InferErrors<VS extends unknown[]> = VS extends [
-    Validator<unknown, infer X>,
-    Validator<unknown, infer Y>,
-    ...infer Tail,
-]
-    ? InferErrors<[Validator<unknown, MergeErrors<[X, Y]>>, ...Tail]>
-    : VS extends [Validator<unknown, infer X>]
-      ? X
+type InferOutputIntersection<Out1, Vas> = Vas extends []
+    ? Out1
+    : // biome-ignore lint/suspicious/noExplicitAny:
+      Vas extends [Validator<infer Out2, AnyError, any>, ...infer Tail]
+      ? Out2 & InferOutputIntersection<Out1, Tail>
       : never;
 
-type InferBrands<VS extends unknown[]> = VS extends [
-    Validator<unknown, unknown, infer X>,
-    Validator<unknown, unknown, infer Y>,
-    ...infer Tail,
-]
-    ? InferBrands<[Validator<unknown, unknown, X & Y>, ...Tail]>
-    : VS extends [Validator<unknown, unknown, infer X>]
-      ? X
+type InferErrorUnion<E1, Vas> = Vas extends []
+    ? E1
+    : // biome-ignore lint/suspicious/noExplicitAny:
+      Vas extends [Validator<unknown, infer E2, any>, ...infer Tail]
+      ? E2 | InferErrorUnion<E1, Tail>
       : never;
 
-export const and = <
-    const V extends Validator<Out, unknown, unknown, In>,
-    const VS extends Validator<Out, unknown, unknown, In>[],
-    Out,
-    In,
->(
-    v: V,
-    ...vs: VS
-): Validator<Out, InferErrors<[V, ...VS]>, InferBrands<[V, ...VS]>, In> => {
-    return new Validator((input) => {
-        const results = [v, ...vs].map((va) => va.validate(input));
-        const errors = results.filter((r) => !r.success).map((r) => r.error);
+export const and =
+    <
+        Va1 extends Validator<Out1, E1, In>,
+        Vas extends readonly Validator<unknown, AnyError, In>[],
+        Out1 = InferOutput<Va1>,
+        E1 extends AnyError = InferError<Va1>,
+        In = InferInput<Va1>,
+    >(
+        va: Va1,
+        ...vas: Vas
+    ): Validator<
+        InferOutputIntersection<Out1, Vas>,
+        InferErrorUnion<E1, Vas>,
+        In
+    > =>
+    (input) => {
+        const results = [va, ...vas].map((v) => v(input));
 
-        return errors.length > 0
-            ? err(
-                  (errors.length === 1 ? errors[0] : errors) as InferErrors<
-                      [V, ...VS]
-                  >,
-              )
-            : ok(input as Out & InferBrands<[V, ...VS]>);
-    });
-};
+        const errors = results
+            .filter((res) => res.success === false)
+            .flatMap(({ error }) => error as InferErrorUnion<E1, Vas>[]);
+
+        return errors.length === 0
+            ? ok(input as InferOutputIntersection<Out1, Vas>)
+            : err(errors);
+    };
