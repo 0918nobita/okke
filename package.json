@@ -14,10 +14,6 @@
       "require": "./dist/index.cjs",
       "import": "./dist/index.js"
     },
-    "./obj": {
-      "require": "./dist/obj.cjs",
-      "import": "./dist/obj.js"
-    },
     "./str": {
       "require": "./dist/str.cjs",
       "import": "./dist/str.js"

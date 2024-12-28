@@ -1,94 +1,96 @@
-import type { MergeErrors } from './mergeErrors';
-import { type ValidationResult, err, ok } from './result';
+import type { OkkeError } from './error';
+import type { Result } from './result';
 
-type ValidateFn<Out, Err, Brands = unknown, In = Out> = (
-    input: In,
-) => ValidationResult<Out & Brands, Err>;
+export type Validator<
+    out Out,
+    out Err extends readonly OkkeError[],
+    out Brands = unknown,
+    in In = Out,
+> = (input: In) => Result<Out & Brands, Err>;
 
-export class Validator<Out, Err, Brands = unknown, In = Out> {
-    constructor(private validateFn: ValidateFn<Out, Err, Brands, In>) {}
+// TODO: Out, Brands の組を複数用意して union で表現できるように Validator を修正する
 
-    validate(input: In): ValidationResult<Out & Brands, Err> {
-        return this.validateFn(input);
-    }
+export type AnyValidator = Validator<
+    unknown,
+    readonly OkkeError[],
+    unknown,
+    // biome-ignore lint/suspicious/noExplicitAny:
+    any
+>;
 
-    map<U>(mapping: (x: Out & Brands) => U): Validator<U, Err, Brands, In> {
-        return new Validator((input) => {
-            const result = this.validateFn(input);
-            return result.success
-                ? ok(mapping(result.value) as U & Brands)
-                : err(result.error);
-        });
-    }
+export type InferOutput<V extends AnyValidator> = V extends Validator<
+    infer Out,
+    readonly OkkeError[],
+    unknown,
+    // biome-ignore lint/suspicious/noExplicitAny:
+    any
+>
+    ? Out
+    : never;
 
-    and<U, E, B>(
-        va: Validator<U, E, B, In>,
-    ): Validator<Out & U, MergeErrors<[Err, E]>, Brands & B, In> {
-        return new Validator((input) => {
-            type ErrAlias = MergeErrors<[Err, E]>;
+export type InferError<V extends AnyValidator> = V extends Validator<
+    unknown,
+    readonly OkkeError<infer Path, infer Reason>[],
+    unknown,
+    // biome-ignore lint/suspicious/noExplicitAny:
+    any
+>
+    ? OkkeError<Path, Reason>
+    : never;
 
-            const result1 = this.validateFn(input);
-            const result2 = va.validateFn(input);
+export type InferErrors<Vas extends readonly AnyValidator[]> = Vas extends [
+    Validator<
+        unknown,
+        readonly OkkeError<infer Path, infer Reason>[],
+        unknown,
+        // biome-ignore lint/suspicious/noExplicitAny:
+        any
+    >,
+    ...infer Tail,
+]
+    ? Tail extends readonly AnyValidator[]
+        ? OkkeError<Path, Reason> | InferErrors<Tail>
+        : never
+    : Vas extends [
+            Validator<
+                unknown,
+                readonly OkkeError<infer Path, infer Reason>[],
+                unknown,
+                // biome-ignore lint/suspicious/noExplicitAny:
+                any
+            >,
+        ]
+      ? OkkeError<Path, Reason>
+      : never;
 
-            if (result1.success) {
-                return result2.success
-                    ? ok(result1.value as Out & U & Brands & B)
-                    : err(result2.error as ErrAlias);
-            }
+export type InferBrand<V extends AnyValidator> = V extends Validator<
+    unknown,
+    readonly OkkeError[],
+    infer Brands,
+    // biome-ignore lint/suspicious/noExplicitAny:
+    any
+>
+    ? Brands
+    : never;
 
-            if (result2.success) {
-                return err(result1.error as ErrAlias);
-            }
+export type InferBrands<Vas extends readonly AnyValidator[]> = Vas extends [
+    // biome-ignore lint/suspicious/noExplicitAny:
+    Validator<unknown, readonly OkkeError[], infer B, any>,
+    ...infer Tail,
+]
+    ? Tail extends readonly AnyValidator[]
+        ? B | InferBrands<Tail>
+        : never
+    : // biome-ignore lint/suspicious/noExplicitAny:
+      Vas extends [Validator<unknown, readonly OkkeError[], infer B, any>]
+      ? B
+      : never;
 
-            if (
-                typeof result1.error === 'object' &&
-                typeof result2.error === 'object'
-            ) {
-                return err({
-                    ...result1.error,
-                    ...result2.error,
-                } as ErrAlias);
-            }
-
-            if (Array.isArray(result1.error)) {
-                return err(
-                    (Array.isArray(result2.error)
-                        ? [...result1.error, ...result2.error]
-                        : [...result1.error, result2.error]) as ErrAlias,
-                );
-            }
-
-            return err(
-                (Array.isArray(result2.error)
-                    ? [result1.error, ...result2.error]
-                    : [result1.error, result2.error]) as ErrAlias,
-            );
-        });
-    }
-
-    pipe<U, E, B>(
-        cont: Validator<U, E, B, Out>,
-    ): Validator<U, Err | E, Brands & B, In> {
-        return new Validator((input) => {
-            const result1 = this.validateFn(input);
-            if (!result1.success) {
-                return err(result1.error as Err | E);
-            }
-            const result2 = cont.validateFn(result1.value);
-            return result2.success
-                ? ok(result2.value as U & Brands & B)
-                : err(result2.error);
-        });
-    }
-
-    orElse<E, B>(
-        fallback: Validator<Out, E, B, In>,
-    ): Validator<Out, E, Brands | B, In> {
-        return new Validator((input) => {
-            const result = this.validateFn(input);
-            return result.success
-                ? ok(result.value)
-                : fallback.validateFn(input);
-        });
-    }
-}
+export type InferInput<V> = V extends Validator<
+    unknown,
+    readonly OkkeError[],
+    unknown,
+    infer In
+>
+    ? In
+    : never;

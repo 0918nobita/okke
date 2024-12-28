@@ -1,46 +1,47 @@
-import type { MergeErrors } from './mergeErrors';
+import type { OkkeError } from './error';
 import { err, ok } from './result';
-import { Validator } from './validator';
-
-type InferErrors<VS extends unknown[]> = VS extends [
-    Validator<unknown, infer X>,
-    Validator<unknown, infer Y>,
-    ...infer Tail,
-]
-    ? InferErrors<[Validator<unknown, MergeErrors<[X, Y]>>, ...Tail]>
-    : VS extends [Validator<unknown, infer X>]
-      ? X
-      : never;
-
-type InferBrands<VS extends unknown[]> = VS extends [
-    Validator<unknown, unknown, infer X>,
-    Validator<unknown, unknown, infer Y>,
-    ...infer Tail,
-]
-    ? InferBrands<[Validator<unknown, unknown, X & Y>, ...Tail]>
-    : VS extends [Validator<unknown, unknown, infer X>]
-      ? X
-      : never;
+import type {
+    AnyValidator,
+    InferBrand,
+    InferBrands,
+    InferError,
+    InferErrors,
+    InferInput,
+    InferOutput,
+    Validator,
+} from './validator';
 
 export const and = <
-    const V extends Validator<Out, unknown, unknown, In>,
-    const VS extends Validator<Out, unknown, unknown, In>[],
-    Out,
-    In,
+    Va extends AnyValidator,
+    Vas extends ReadonlyArray<
+        Validator<
+            InferOutput<Va>,
+            readonly OkkeError[],
+            unknown,
+            InferInput<Va>
+        >
+    >,
 >(
-    v: V,
-    ...vs: VS
-): Validator<Out, InferErrors<[V, ...VS]>, InferBrands<[V, ...VS]>, In> => {
-    return new Validator((input) => {
-        const results = [v, ...vs].map((va) => va.validate(input));
-        const errors = results.filter((r) => !r.success).map((r) => r.error);
+    va: Va,
+    ...vas: Vas
+): Validator<
+    InferOutput<Va>,
+    ReadonlyArray<InferError<Va> | InferErrors<Vas>>,
+    InferBrand<Va> & InferBrands<Vas>,
+    InferInput<Va>
+> => {
+    return (input) => {
+        const results = [va, ...vas].map((v) => v(input));
 
-        return errors.length > 0
-            ? err(
-                  (errors.length === 1 ? errors[0] : errors) as InferErrors<
-                      [V, ...VS]
-                  >,
-              )
-            : ok(input as Out & InferBrands<[V, ...VS]>);
-    });
+        const errors = results
+            .filter((res) => res.success === false)
+            .flatMap(
+                ({ error }) =>
+                    error as ReadonlyArray<InferError<Va> | InferErrors<Vas>>,
+            );
+
+        return errors.length === 0
+            ? ok(input as InferOutput<Va> & InferBrand<Va> & InferBrands<Vas>)
+            : err(errors);
+    };
 };
